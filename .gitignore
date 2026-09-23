@@ -1,3 +1,8 @@
 *.bak
 __pycache__/
 .DS_Store
+
+# 本机装载产物（含绝对路径，因机器而异）
+.claude/
+.codex/
+.pi/
