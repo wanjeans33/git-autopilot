@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|shell|local_shell|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"__HOOKS_DIR__/guard-branch.py\"",
+            "statusMessage": "检查分支"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"__HOOKS_DIR__/nudge-review.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
