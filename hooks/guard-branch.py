@@ -5,6 +5,7 @@ guard-branch.py —— 不在保护分支（main/master）上干活；新分支�
 三家 agent 共用同一份：Claude Code / Codex CLI / Pi 的 PreToolUse 协议是一样的
   stdin : 事件 JSON（tool_name / tool_input / cwd ...）
   stdout: {"hookSpecificOutput": {"permissionDecision": "deny", ...}}  → 拦下这次工具调用
+          {"hookSpecificOutput": {"permissionDecision": "ask",  ...}}  → 弹确认框，人点了才放行
   exit 0 永远返回，让宿主按 JSON 判断；解析不了就放行，守卫绝不能把会话卡死。
 
 逃生门（二选一）：
@@ -29,7 +30,7 @@ GIT_WRITE = re.compile(
 GIT_RESET_HARD = re.compile(r"\bgit\b[\s\S]*?\breset\b[\s\S]*?--hard\b")
 # 强推保护分支：任何分支上都拦
 FORCE_PUSH = re.compile(r"\bgit\b[\s\S]*?\bpush\b[\s\S]*?(--force(?!-with-lease)|(?<![\w-])-f(?![\w-]))")
-# 合并 PR：任何分支上都拦。开 PR 可以（先问人），合 PR 只能人自己来。
+# 合并 PR：任何分支上都弹确认框，人点了才合。开 PR 不问（约定里要求 agent 先提议）。
 GH_MERGE = re.compile(r"\bgh\b[\s\S]*?\bpr\b[\s\S]*?\bmerge\b")
 
 # 各家改文件的工具名并集
@@ -120,7 +121,11 @@ def main():
         if FORCE_PUSH.search(seg) and re.search(prot_re, seg):
             emit("deny", "拒绝强推保护分支。要覆盖远端请你本人确认后手动执行。")
         if GH_MERGE.search(seg):
-            emit("deny", "合并 PR 由人来点。你可以建议提交 / 合并 PR，但不要自己执行 gh pr merge。")
+            emit(
+                "ask",
+                f"agent 要合并 PR：{seg.strip()}\n"
+                f"合并后改动就进 {' / '.join(prot)} 了，不好撤。确认要合？",
+            )
 
     # ---- 规则 1：新建分支必须符合命名约定，任何分支都查 ----
     pattern = branch_pattern(cwd)

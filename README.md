@@ -19,8 +19,9 @@
   再推到远端同名分支。电脑死机、会话崩了，改动都在，GitHub 上也有。**不碰 main**，merge / rebase 进行中也不碰，
   推送永远不带 force。
 - **收工提醒一句：** 这条分支已经攒了多少提交、多少文件，要不要先审一遍再合。
-- **该提 PR 了会提议，但不自己提、更不自己合。** 阶段性完成由 agent 判断，判断到了就向你提议"建议提交 PR"，
-  你点头它才 `gh pr create`。`gh pr merge` 任何时候都拦，合并只能你来。
+- **该提 PR 了会提议，合并前一定弹框问你。** 阶段性完成由 agent 判断，判断到了就向你提议"建议提交 PR"，
+  你点头它才 `gh pr create`。合并可以由 agent 执行，但 `gh pr merge` 一敲下去，宿主会弹一个确认框，
+  你点"允许"才真的合，点"拒绝"就停。跟 Claude Code 平时问你"要不要允许这条命令"是同一个框。
 - **不让强推覆盖 main。** 这是少数几个能真把别人工作干掉的操作，任何分支上都拦。
 - **把约定写进 CLAUDE.md 和 AGENTS.md。** hook 是事后拦，文档是事前讲。两边说的是同一套规则，
   agent 一开始就按规矩走，而不是撞了墙才知道。
@@ -29,7 +30,7 @@
 
 说清楚比藏着好：
 
-- **不会自动开 PR、不会自动合并。** 开 PR 要先问你，合并只能你来点。
+- **不会不问就开 PR、不问就合并。** 开 PR 前 agent 会提议，合并时宿主会弹框，两道都过了才动。
 - **自动存档不等于替你写提交历史。** `wip:` 提交只是防丢，合并前该 squash 就 squash，
   整理完用 `git push --force-with-lease` 推自己的分支。
 - **不是安全防护。** 它防的是顺手犯错，不防人故意绕过。真要挡住谁，
@@ -84,6 +85,9 @@ git config autopilot.autopush false
 stdout 回 `hookSpecificOutput.permissionDecision`。所以这里只有一份 `guard-branch.py`，
 不是三份。
 
+`permissionDecision` 有三档：`allow` 放行、`deny` 拦下、`ask` 弹确认框。合并 PR 用的是 `ask`。
+Claude Code 三档都实测过；Codex / Pi 的 `ask` 按文档同构，未实测，首次用前建议在一个不要紧的 PR 上试一次。
+
 首次手测（尤其 Pi）：
 
 ```bash
@@ -113,7 +117,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 | 规则 | 行为 |
 |---|---|
 | 强推 main/master | **任何分支都拦**（`--force-with-lease` 放行） |
-| `gh pr merge` | **任何分支都拦**，合并只能人来 |
+| `gh pr merge` | **任何分支都弹确认框**（`permissionDecision: ask`），人点允许才执行 |
 | `git switch -c` / `checkout -b` / `branch` 起的名字不合规 | **任何分支都拦**，回一句该怎么起 |
 | 保护分支上 `Edit` / `Write` / `apply_patch` | **拦** |
 | 保护分支上 `commit` `merge` `rebase` `push` `revert` `reset --hard` | **拦**（`cd x && git commit` 也拦得住，按 `&&` `;` `\|\|` 切段判断） |
