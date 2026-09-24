@@ -9,7 +9,8 @@
   整理后用 `git push --force-with-lease` 推自己的分支。
 - **阶段性完成时，自己判断要不要提 PR。** 功能能跑、测试过、改动能用一段话说清，就算到了阶段。
   到了就先跑 code-review，然后**向人提议**："建议提交 PR 了"，附分支名、提交数、改动摘要。
-  人同意再 `gh pr create`；没同意就继续干。**永远不要自己 `gh pr merge`**，会被拦。
+  人同意再 `gh pr create`；没同意就继续干。合并也一样先提议，人说合再 `gh pr merge`，
+  执行时还会再弹一次确认框给人，人点了才真的合。别想办法绕开它。
 - **不强推 main / master。** 任何分支上都会被拦。要覆盖远端，让人自己来。
 - **确实必须在 main 上操作：** `touch .git/ALLOW_MAIN`，做完 `rm` 掉。
 <!-- git-autopilot:end -->
