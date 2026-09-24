@@ -3,7 +3,7 @@
 给 AI coding agent 装一个 **git 自动驾驶**。
 
 装上之后，你只管用自然语言跟 agent 说要做什么。分支什么时候该开、叫什么名字、收工要不要存档、
-合并前要不要先审，它替你把关。**你随时可以接管。**
+什么时候该提 PR、合并前要不要先审，它替你把关。**你随时可以接管。**
 
 给谁用：不想管 git、也没必要学 git 的人。装完就不用再操心了。
 
@@ -23,7 +23,7 @@
   你点头它才 `gh pr create`。合并可以由 agent 执行，但 `gh pr merge` 一敲下去，宿主会弹一个确认框，
   你点"允许"才真的合，点"拒绝"就停。跟 Claude Code 平时问你"要不要允许这条命令"是同一个框。
 - **不让强推覆盖 main。** 这是少数几个能真把别人工作干掉的操作，任何分支上都拦。
-- **把约定写进 CLAUDE.md 和 AGENTS.md。** hook 是事后拦，文档是事前讲。两边说的是同一套规则，
+- **把约定讲在前面。** hook 是事后拦，约定是事前讲。两边说的是同一套规则，
   agent 一开始就按规矩走，而不是撞了墙才知道。
 
 ## 它不替你做什么
@@ -40,17 +40,40 @@
 
 ## 装
 
-```bash
-./install.sh /path/to/repo      # 省略路径 = 当前目录
+三条路，选一条。都是装一次管所有仓库，不用每个项目单独弄。
+
+### 1. Claude Code：装插件（推荐）
+
+在 Claude Code 里：
+
+```
+/plugin marketplace add wanjeans33/git-autopilot
+/plugin install git-autopilot@git-autopilot
 ```
 
-一次把三家 agent 都装好，顺手往目标仓库的 `CLAUDE.md` 和 `AGENTS.md` 里追加一段带标记的约定。
-重复装不会装重；**不会动你已有的其他配置和文档内容**，装之前自动备份成 `.bak`。
+不需要 bash，不改任何仓库，Windows 直接用。插件自带 hook 和一份 skill，skill 就是下面那段约定，
+agent 在 git 仓库里动手前会自己加载。
 
-卸载：
+### 2. Codex / Pi，或者不想用插件：`install.py`
+
+只依赖 Python 3.8+，三个系统一样：
 
 ```bash
-./install.sh --uninstall /path/to/repo
+python3 install.py --global          # 用户级，所有仓库生效（推荐）
+python3 install.py /path/to/repo     # 或者只装到一个仓库
+python3 install.py --uninstall --global
+```
+
+Windows 上用 `py install.py` 或 `python install.py`。老习惯 `./install.sh` 还在，它只是转调 `install.py`。
+
+用户级装到 `~/.claude/settings.json`、`~/.codex/hooks.json`、`~/.pi/agent/settings.json`，
+约定段落写进 `~/.claude/CLAUDE.md` 和 `~/.codex/AGENTS.md`。按仓库装则写进仓库里的同名文件。
+重复装不会装重，**不会动你已有的其他配置和文档内容**，装之前自动备份成 `.bak`。
+
+### 3. 某个仓库不想要
+
+```bash
+git config autopilot.enabled false
 ```
 
 ## 接管
@@ -75,11 +98,11 @@ git config autopilot.autopush false
 
 ## 支持哪些 agent
 
-| | hook 写到 | 约定写到 | 状态 |
+| | 装法 | 约定写到 | 状态 |
 |---|---|---|---|
-| Claude Code | `.claude/settings.json` | `CLAUDE.md` | 官方文档，已实测触发 |
-| Codex CLI | `.codex/hooks.json` | `AGENTS.md` | 官方文档，hook 可能需在 config.toml 打开开关，未实测 |
-| Pi | `.pi/settings.json` | `AGENTS.md` | Claude 兼容层是第三方适配，首次用前先手测（见下） |
+| Claude Code | 插件，或 `install.py` | skill，或 `CLAUDE.md` | 官方文档，deny / ask / Stop 都实测过 |
+| Codex CLI | `install.py` | `AGENTS.md` | 官方文档，hook 可能需在 config.toml 打开开关，未实测 |
+| Pi | `install.py` | `AGENTS.md` | Claude 兼容层是第三方适配，全局路径按其文档推断，首次用前先手测（见下） |
 
 三家能共用同一份脚本，是因为它们的 hook 协议**是同构的**——都是 stdin 收事件 JSON、
 stdout 回 `hookSpecificOutput.permissionDecision`。所以这里只有一份 `guard-branch.py`，
@@ -105,12 +128,16 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 
 | 路径 | 说明 |
 |---|---|
-| `hooks/guard-branch.py` | 分支守卫 + 分支命名校验，跑在 PreToolUse 阶段 |
+| `hooks/guard-branch.py` | 分支守卫 + 分支命名校验 + 合并确认，跑在 PreToolUse 阶段 |
 | `hooks/wrap-up.py` | 收工自动存档 + 推送 + 提示 + PR 提议，跑在 Stop 阶段 |
 | `hooks/_common.py` | 两者共用：读 `git config autopilot.*` |
-| `templates/*.json` | 三家的 hook 配置模板，`__HOOKS_DIR__` 装载时替换成绝对路径 |
-| `templates/agent-rules.md` | 写进 CLAUDE.md / AGENTS.md 的那段约定 |
-| `install.sh` | 装载 / 卸载，幂等 |
+| `hooks/py.sh` | 插件模式的启动器：依次找 `python3` / `python` / `py -3`，都没有就静默放行 |
+| `hooks/hooks.json` | 插件的 hook 声明，路径用 `${CLAUDE_PLUGIN_ROOT}` |
+| `.claude-plugin/` | 插件清单和 marketplace 清单 |
+| `skills/git-autopilot/` | 插件带的 skill，内容就是那段约定 |
+| `templates/*.json` | `install.py` 用的三家 hook 配置模板，`__PYTHON__` / `__HOOKS_DIR__` 装载时替换 |
+| `templates/agent-rules.md` | `install.py` 写进 CLAUDE.md / AGENTS.md 的那段约定 |
+| `install.py` | 装载 / 卸载，幂等，跨平台。`install.sh` 只是转调它 |
 
 ### 规则
 
@@ -133,6 +160,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 
 | 键 | 默认 | 说明 |
 |---|---|---|
+| `autopilot.enabled` | `true` | 这个仓库要不要这套。用户级安装后用它关掉个别仓库 |
 | `autopilot.protected` | `main master` | 保护分支，空格或逗号分隔 |
 | `autopilot.base` | protected 里第一个存在的 | 收工提示拿哪条分支做比较基准 |
 | `autopilot.branch-prefixes` | `feat fix chore docs refactor test` | 允许的分支前缀 |
@@ -159,6 +187,13 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 - 自动存档用 `git add -A`，没进 `.gitignore` 的临时产物会被一起存进去。
 - 自动推送需要本机已有推送凭据（ssh key 或 credential helper），没有就直接失败并提示，不会挂在密码提示上。
 - PR 提议依赖 `gh` 已登录；`gh` 没装或没登录就不提，也不报错。
+- `install.py` 把**运行它的那个 Python** 的绝对路径写进 hook。之后换掉或删掉这个 Python（比如 uv 管理的版本），
+  守卫会静默失效。重跑一次 `install.py` 即可。插件模式没有这个问题，`py.sh` 每次现找。
+- 插件和 `install.py` 同时装了会各跑一遍守卫，结果一样，只是多花几十毫秒。
+- 插件的清单和 hook 声明按官方文档写，`hooks/py.sh` 启动器实测过；但 `/plugin install` 这条流程本身
+  还没在干净机器上走过一遍。装完在 main 上随便 Edit 一下，被拦就是装好了。
+- Windows 上 hook 由 Claude Code 通过 Git Bash 执行，`py.sh` 和 `install.py` 都按这个前提写，
+  但 Windows 一次都没实测。有 Windows 的人试过请开 issue。
 
 ### 为什么不放网盘
 

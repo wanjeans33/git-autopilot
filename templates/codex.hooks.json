@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"__HOOKS_DIR__/guard-branch.py\"",
+            "command": "\"__PYTHON__\" \"__HOOKS_DIR__/guard-branch.py\"",
             "statusMessage": "检查分支"
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"__HOOKS_DIR__/wrap-up.py\"",
+            "command": "\"__PYTHON__\" \"__HOOKS_DIR__/wrap-up.py\"",
             "timeout": 60
           }
         ]

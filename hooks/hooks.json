@@ -2,11 +2,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "\"__PYTHON__\" \"__HOOKS_DIR__/guard-branch.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" guard-branch.py",
+            "timeout": 10,
+            "statusMessage": "检查分支"
           }
         ]
       }
@@ -16,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"__PYTHON__\" \"__HOOKS_DIR__/wrap-up.py\"",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" wrap-up.py",
             "timeout": 60
           }
         ]

@@ -20,7 +20,7 @@ import re
 import shlex
 import sys
 
-from _common import branch_hint, branch_pattern, git, protected
+from _common import branch_hint, branch_pattern, enabled, git, protected
 
 # 会改动仓库状态的 git 子命令。注意 switch/checkout/branch 不在内 —— 它们正是补救动作。
 GIT_WRITE = re.compile(
@@ -109,6 +109,8 @@ def main():
         allow()
 
     cwd = ev.get("cwd") or os.getcwd()
+    if not enabled(cwd):
+        allow()  # 这个仓库明确说不要
     tool = ev.get("tool_name") or ""
     ti = ev.get("tool_input") or {}
     cmd = ti.get("command") or "" if tool in SHELL_TOOLS else ""

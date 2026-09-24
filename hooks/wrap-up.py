@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 
-from _common import base_branch, cfg, cfg_bool, git, git_rc, protected
+from _common import base_branch, cfg, cfg_bool, enabled, git, git_rc, protected
 
 try:
     ev = json.load(sys.stdin)
@@ -29,7 +29,7 @@ except Exception:
 cwd = ev.get("cwd") or os.getcwd()
 
 branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
-if not branch or branch == "HEAD" or branch in protected(cwd):
+if not branch or branch == "HEAD" or branch in protected(cwd) or not enabled(cwd):
     sys.exit(0)
 
 msgs = []
