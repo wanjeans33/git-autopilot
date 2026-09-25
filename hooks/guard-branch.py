@@ -162,6 +162,8 @@ def pr_info(cwd, selector, repo):
         timeout = float(cfg(cwd, "gh-timeout", "5"))
     except ValueError:
         timeout = 5.0
+    if timeout <= 0:
+        return None, "autopilot.gh-timeout 设成了 0，按约定不查"
     args = ["gh", "pr", "view"] + ([selector] if selector else []) + (["-R", repo] if repo else []) + ["--json", PR_FIELDS]
     try:
         r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
@@ -207,7 +209,7 @@ def pr_summary(cwd, seg, prot):
         method += "，--auto：CI 过了自动合"
     delete = "是" if a["delete"] else "否（没传 --delete-branch）"
     if info is None:
-        view = " ".join(["gh pr view", a["selector"]]).strip()
+        view = f"gh pr view {a['selector']}".strip()
         return (
             f"agent 要合并 PR：{seg.strip()}\n"
             f"没查到 PR 信息：{err}\n"
@@ -216,11 +218,13 @@ def pr_summary(cwd, seg, prot):
         )
     base = info.get("baseRefName") or "?"
     base_note = "（保护分支）" if base in prot else ""
+    n_commits = len(info.get("commits") or [])
+    commits = f"{n_commits}+" if n_commits >= 100 else str(n_commits)   # gh 的 commits 字段只给前 100 个
     lines = [
         f"agent 要合并 PR #{info.get('number')}「{info.get('title', '')}」",
         f"{info.get('url', '')}",
         f"  {info.get('headRefName') or '?'} → {base}{base_note}",
-        f"  {len(info.get('commits') or [])} 个提交，改了 {info.get('changedFiles', '?')} 个文件，"
+        f"  {commits} 个提交，改了 {info.get('changedFiles', '?')} 个文件，"
         f"+{info.get('additions', '?')} / -{info.get('deletions', '?')}",
         f"  CI：{ci_status(info.get('statusCheckRollup'))}    "
         f"review：{REVIEW_TEXT.get(info.get('reviewDecision') or '', info.get('reviewDecision'))}    "

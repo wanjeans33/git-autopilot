@@ -26,6 +26,7 @@ case "$FAKE_GH_MODE" in
   ok)   cat "$FAKE_GH_JSON" ;;
   fail) echo "GraphQL: Could not resolve to a PullRequest with the number of 9999." >&2; exit 1 ;;
   slow) sleep 5; echo '{}' ;;
+  junk) echo "Welcome to gh 3.0! See changelog."; cat "$FAKE_GH_JSON" ;;
 esac
 """
 
@@ -170,6 +171,30 @@ class MergeConfirmationCarriesPrInfo(unittest.TestCase):
         out = json.loads(r.stdout)["hookSpecificOutput"]
         self.assertEqual(out["permissionDecision"], "ask")
         self.assertIn("跑不了 gh", out["permissionDecisionReason"])
+
+    def test_non_json_output_still_asks(self):
+        decision, reason = self.guard(self.MERGE, "claude", "junk")
+        self.assertEqual(decision, "ask")
+        self.assertIn("没查到 PR 信息：gh 返回的不是 JSON", reason)
+        self.assertIn(self.MERGE, reason)
+
+    def test_timeout_zero_skips_lookup(self):
+        git(self.repo, "config", "autopilot.gh-timeout", "0")
+        decision, reason = self.guard(self.MERGE, "claude", "ok")
+        self.assertEqual(decision, "ask")
+        self.assertIn("gh-timeout 设成了 0", reason)
+        self.assertEqual(self.gh_calls(), [])  # 真的没去跑 gh
+
+    def test_bad_timeout_value_falls_back_to_default(self):
+        git(self.repo, "config", "autopilot.gh-timeout", "fast")
+        decision, reason = self.guard(self.MERGE, "claude", "ok")
+        self.assertEqual(decision, "ask")
+        self.assertIn("PR #12", reason)
+
+    def test_commit_count_cap_is_marked(self):
+        self.pr_json.write_text(json.dumps(dict(PR, commits=[{"oid": str(i)} for i in range(100)])), encoding="utf-8")
+        _, reason = self.guard(self.MERGE, "claude", "ok")
+        self.assertIn("100+ 个提交", reason)
 
     def test_closed_pr_is_flagged(self):
         self.pr_json.write_text(json.dumps(dict(PR, state="MERGED", isDraft=True, mergeable="CONFLICTING")), encoding="utf-8")

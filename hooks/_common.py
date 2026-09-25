@@ -9,7 +9,7 @@ _common.py —— 几个 hook 共用的小函数和配置读取。
   autopilot.autocommit      收工时是否自动把未提交改动存档成 wip 提交。默认 true
   autopilot.autopush        收工时是否自动把工作分支推到远端（不带 force）。默认 true
   autopilot.pr-nudge-after  领先基准分支多少个提交后，收工提示里开始建议提 PR。默认 3
-  autopilot.gh-timeout      合并 PR 弹确认框前查 PR 信息（gh pr view）最多等几秒，超时就明说没查到。默认 5
+  autopilot.gh-timeout      合并 PR 弹确认框前查 PR 信息（gh pr view）最多等几秒，超时就明说没查到。默认 5，设 0 不查
   autopilot.enabled         本仓库要不要这套。默认 true。用户级安装后，个别仓库用它关掉
 """
 import os
