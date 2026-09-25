@@ -1,6 +1,6 @@
 {
   "name": "git-autopilot",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "给 AI coding agent 的 git 自动驾驶：不在 main 上干活、分支命名、收工自动存档与推送、阶段性提议 PR、合并前弹框确认。",
   "author": { "name": "Wanjeans" },
   "repository": "https://github.com/wanjeans33/git-autopilot",
