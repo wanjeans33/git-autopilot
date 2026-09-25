@@ -143,16 +143,20 @@ def main():
                     f"或 git config autopilot.branch-pattern '<正则>'",
                 )
 
-    branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+    # symbolic-ref 在刚 init、还没有任何提交的"未出生"分支上也能给出分支名；
+    # rev-parse --abbrev-ref HEAD 那时会报错，拿到空串就等于把新仓库的 main 放开了。
+    # detached HEAD、不在 git 仓库里：都是空串，放行。
+    branch = git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
     if not branch or branch not in prot:
-        allow()  # 不在 git 仓库里，或已经在工作分支上
+        allow()  # 不在 git 仓库里、detached HEAD，或已经在工作分支上
 
     # ---- 逃生门 ----
     if os.environ.get("ALLOW_MAIN") == "1":
         allow()
     common = git(cwd, "rev-parse", "--git-common-dir")  # worktree 里也指向主仓的 .git
     if common and not os.path.isabs(common):
-        common = os.path.join(git(cwd, "rev-parse", "--show-toplevel") or cwd, common)
+        # git 输出的相对路径是相对 cwd 的（从子目录调用会是 ../.git），不是相对仓库根
+        common = os.path.normpath(os.path.join(cwd, common))
     root = git(cwd, "rev-parse", "--show-toplevel") or cwd
     for marker in (
         os.path.join(common, "ALLOW_MAIN") if common else "",

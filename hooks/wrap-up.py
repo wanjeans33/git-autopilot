@@ -28,8 +28,9 @@ except Exception:
     ev = {}
 cwd = ev.get("cwd") or os.getcwd()
 
-branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
-if not branch or branch == "HEAD" or branch in protected(cwd) or not enabled(cwd):
+# symbolic-ref 在还没有提交的"未出生"分支上也能给出分支名；detached HEAD / 非 git 目录返回空串
+branch = git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+if not branch or branch in protected(cwd) or not enabled(cwd):
     sys.exit(0)
 
 msgs = []
@@ -46,12 +47,19 @@ if dirty and cfg_bool(cwd, "autocommit", True) and not in_progress:
     files = [parts[1] for parts in (line.split(None, 1) for line in dirty.splitlines()) if len(parts) == 2]
     head = ", ".join(files[:4]) + (f" 等 {len(files)} 个文件" if len(files) > 4 else "")
     body = "\n".join(files)
-    git(cwd, "add", "-A", timeout=30)
-    rc, _, err = git_rc(cwd, "commit", "-q", "-m", f"wip: 收工自动存档 — {head}\n\n{body}", timeout=30)
-    if rc == 0:
-        msgs.append(f"已自动存档 {len(files)} 个文件的改动为 wip 提交（合并前记得整理）。")
+    # add 失败（比如工作区里冒出一个没提交过的嵌套 git 仓库）就到此为止，不能拿着残缺的 index 去提交
+    rc, _, err = git_rc(cwd, "add", "-A", timeout=30)
+    if rc != 0:
+        msgs.append(f"自动存档失败：git add 报错：{err.splitlines()[-1] if err else '未知错误'}。改动仍在工作区，未提交。")
     else:
-        msgs.append(f"自动存档失败：{err.splitlines()[-1] if err else '未知错误'}。改动仍在工作区。")
+        rc, _, err = git_rc(cwd, "commit", "-q", "-m", f"wip: 收工自动存档 — {head}\n\n{body}", timeout=30)
+        if rc == 0:
+            # 数实际进了提交的文件，不数操作前工作区里的脏文件
+            committed = git(cwd, "show", "--format=", "--name-only", "HEAD")
+            n = len([f for f in committed.splitlines() if f])
+            msgs.append(f"已自动存档 {n} 个文件的改动为 wip 提交（合并前记得整理）。")
+        else:
+            msgs.append(f"自动存档失败：{err.splitlines()[-1] if err else '未知错误'}。改动仍在工作区。")
 elif dirty and in_progress:
     msgs.append("有 merge/rebase 正在进行，未自动存档。")
 
