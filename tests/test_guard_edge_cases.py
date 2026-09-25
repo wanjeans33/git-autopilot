@@ -12,8 +12,19 @@ import tempfile
 import unittest
 
 HOOKS = pathlib.Path(__file__).resolve().parent.parent / "hooks"
-ENV = {k: v for k, v in os.environ.items() if k != "ALLOW_MAIN"}
-ENV.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "PYTHONDONTWRITEBYTECODE": "1"})
+# 去掉宿主环境里的 GIT_DIR / GIT_WORK_TREE 之类（从 git hook 里跑测试时会带着），再隔离全局配置
+ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "ALLOW_MAIN"}
+ENV.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_ALLOW_PROTOCOL": "file", "PYTHONDONTWRITEBYTECODE": "1"})
+
+
+def git_version():
+    out = subprocess.run(["git", "--version"], text=True, capture_output=True).stdout
+    return tuple(int(x) for x in out.split()[2].split(".")[:2]) if out.startswith("git version") else (0, 0)
+
+
+# GIT_CONFIG_GLOBAL 是 2.32 才有的，更老的 git 会静默忽略，用户的全局配置就漏进来了
+REQUIRE_GIT = (2, 32)
 
 
 def git(cwd, *args, check=True):
@@ -40,6 +51,7 @@ def wrap_up(cwd):
     return json.loads(r.stdout).get("systemMessage", "") if r.stdout.strip() else ""
 
 
+@unittest.skipUnless(git_version() >= REQUIRE_GIT, f"需要 git >= {'.'.join(map(str, REQUIRE_GIT))}")
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -71,6 +83,22 @@ class UnbornBranch(Base):
         msg = wrap_up(self.repo)
         self.assertIn("已自动存档 1 个文件", msg)
         self.assertEqual(git(self.repo, "log", "--format=%s", "-1"), "wip: 收工自动存档 — a")
+
+    def test_unborn_feature_branch_with_remote_and_nothing_to_commit_stays_quiet(self):
+        # clone 了空仓库、开了分支、什么都没提交：没有 HEAD，不能去推，也不能报"推送失败"
+        bare = pathlib.Path(self.tmp.name) / "origin.git"
+        bare.mkdir()
+        git(bare, "init", "-q", "--bare")
+        git(self.repo, "remote", "add", "origin", str(bare))
+        git(self.repo, "config", "--unset", "autopilot.autopush")
+        git(self.repo, "switch", "-qc", "feat/x")
+        self.assertEqual(wrap_up(self.repo), "")
+
+    def test_tag_named_main_does_not_unlock_main(self):
+        self.first_commit()
+        git(self.repo, "tag", "main")
+        self.assertEqual(guard(self.repo, "Edit"), "deny")
+        self.assertEqual(guard(self.repo, "Bash", "git commit --allow-empty -m x"), "deny")
 
     def test_detached_head_is_left_alone(self):
         self.first_commit()
@@ -118,7 +146,16 @@ class AddFailure(Base):
         self.assertEqual(git(self.repo, "rev-parse", "HEAD"), before, "add 失败后不该产生提交")
         self.assertIn("自动存档失败", msg)
         self.assertIn("git add", msg)
+        self.assertIn("nested", msg, "提示里应带上真正的原因（error: 那行），不是笼统的 fatal")
         self.assertNotIn("已自动存档", msg)
+
+    def test_count_is_right_with_a_file_named_HEAD_and_root_commit(self):
+        git(self.repo, "switch", "-qc", "feat/x")          # 未出生分支，这次存档就是根提交
+        git(self.repo, "config", "log.showRoot", "false")  # git show 在这个配置下根提交不列文件
+        (self.repo / "HEAD").write_text("h\n")             # git show HEAD 会报"既是引用又是路径"
+        (self.repo / "a").write_text("a\n")
+        msg = wrap_up(self.repo)
+        self.assertIn("已自动存档 2 个文件", msg)
 
     def test_reported_count_matches_commit(self):
         self.first_commit()

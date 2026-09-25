@@ -28,8 +28,9 @@ except Exception:
     ev = {}
 cwd = ev.get("cwd") or os.getcwd()
 
-# symbolic-ref 在还没有提交的"未出生"分支上也能给出分支名；detached HEAD / 非 git 目录返回空串
-branch = git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+# branch --show-current 在还没有提交的"未出生"分支上也能给出分支名，有同名 tag 也不会变成 heads/x；
+# detached HEAD / 非 git 目录返回空串
+branch = git(cwd, "branch", "--show-current")
 if not branch or branch in protected(cwd) or not enabled(cwd):
     sys.exit(0)
 
@@ -50,12 +51,16 @@ if dirty and cfg_bool(cwd, "autocommit", True) and not in_progress:
     # add 失败（比如工作区里冒出一个没提交过的嵌套 git 仓库）就到此为止，不能拿着残缺的 index 去提交
     rc, _, err = git_rc(cwd, "add", "-A", timeout=30)
     if rc != 0:
-        msgs.append(f"自动存档失败：git add 报错：{err.splitlines()[-1] if err else '未知错误'}。改动仍在工作区，未提交。")
+        # 真正的原因在 error: 那行，最后一行往往只是笼统的 "fatal: adding files failed"
+        lines = err.splitlines() or ["未知错误"]
+        why = next((l for l in lines if l.startswith("error:")), lines[-1])
+        msgs.append(f"自动存档失败：git add 报错：{why.strip()}。改动仍在工作区，未提交。")
     else:
         rc, _, err = git_rc(cwd, "commit", "-q", "-m", f"wip: 收工自动存档 — {head}\n\n{body}", timeout=30)
         if rc == 0:
-            # 数实际进了提交的文件，不数操作前工作区里的脏文件
-            committed = git(cwd, "show", "--format=", "--name-only", "HEAD")
+            # 数实际进了提交的文件，不数操作前工作区里的脏文件。
+            # 不用 git show：工作区里有个叫 HEAD 的文件时它会报歧义，log.showRoot=false 时根提交又是空的
+            committed = git(cwd, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD", "--")
             n = len([f for f in committed.splitlines() if f])
             msgs.append(f"已自动存档 {n} 个文件的改动为 wip 提交（合并前记得整理）。")
         else:
@@ -69,7 +74,9 @@ if cfg_bool(cwd, "autopush", True):
     remote = git(cwd, "config", f"branch.{branch}.remote") or "origin"
     if remote in git(cwd, "remote").split():
         upstream = git(cwd, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-        ahead_of_remote = git(cwd, "rev-list", "--count", "@{u}..HEAD") if upstream else "1"
+        # 没有 upstream 就当领先；但未出生分支上还没有 HEAD（比如 clone 了空仓库就开分支、什么都没提交），没东西可推
+        has_head = bool(git(cwd, "rev-parse", "--verify", "-q", "HEAD"))
+        ahead_of_remote = git(cwd, "rev-list", "--count", "@{u}..HEAD") if upstream else ("1" if has_head else "0")
         if ahead_of_remote != "0":
             rc, _, err = git_rc(
                 cwd, "push", "-u", remote, branch, timeout=45,

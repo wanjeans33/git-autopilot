@@ -143,10 +143,11 @@ def main():
                     f"或 git config autopilot.branch-pattern '<正则>'",
                 )
 
-    # symbolic-ref 在刚 init、还没有任何提交的"未出生"分支上也能给出分支名；
+    # branch --show-current 在刚 init、还没有任何提交的"未出生"分支上也能给出分支名；
     # rev-parse --abbrev-ref HEAD 那时会报错，拿到空串就等于把新仓库的 main 放开了。
+    # 它也不会因为有个同名 tag 就把 main 报成 heads/main（--abbrev-ref 和 symbolic-ref --short 都会）。
     # detached HEAD、不在 git 仓库里：都是空串，放行。
-    branch = git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD")
+    branch = git(cwd, "branch", "--show-current")
     if not branch or branch not in prot:
         allow()  # 不在 git 仓库里、detached HEAD，或已经在工作分支上
 
