@@ -10,6 +10,8 @@ wrap-up.py —— Stop 阶段收工四件事（三家共用，stdin 收 JSON，s
   3. 收工提示：这条分支比基准分支多了多少提交、多少文件，合并前建议先审。
   4. PR 提议：攒够提交（autopilot.pr-nudge-after，默认 3）且没开 PR，提一句"建议向人提议提交 PR"。
      这里不会自己开 PR，更不会合。
+  5. 分支总览：本地工作分支攒到 autopilot.branch-overview-after（默认 3）条以上，顺带列出其他分支里
+     需要注意的：已合并可删、有 wip、远端已删、未推送。完整表格用 hooks/branch-status.py。
 
 几件事放同一个脚本，是因为宿主会把同一事件的多个 hook 并行跑，拆开会让提示数漏掉刚存档的那次。
 不拦任何东西，只是给人看一句话。
@@ -107,6 +109,22 @@ if ahead.isdigit() and int(ahead) > 0:
             # 其他失败（没登录、没网）：不猜，不提
         except Exception:
             pass
+
+# ---- 5. 分支总览：其他分支里有该清理的，提一句。不查 gh（收工要快），完整表格让人自己跑。----
+threshold = cfg(cwd, "branch-overview-after", "3")
+work_branches = [
+    b for b in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads").splitlines()
+    if b and b not in protected(cwd)
+]
+if threshold.isdigit() and len(work_branches) >= int(threshold):
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "branch-status.py")
+    try:
+        r = subprocess.run([sys.executable, script, "--brief"], cwd=cwd, capture_output=True, text=True, timeout=15)
+        others = [l for l in r.stdout.splitlines() if l and not l.startswith(f"{branch}：")]
+    except Exception:
+        others = []
+    if others:
+        msgs.append(f"其他分支：{'；'.join(others)}。完整总览：python3 {script}")
 
 if msgs:
     json.dump({"systemMessage": " ".join(msgs)}, sys.stdout, ensure_ascii=False)

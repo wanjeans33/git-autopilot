@@ -208,7 +208,7 @@ def notes(b, base):
     n = []
     pr = b.get("pr")
     if pr and pr["state"] == "merged":
-        n.append("PR 已合并，可删")
+        n.append("PR 已合并，可删远端分支" if b["kind"] == "remote" else "PR 已合并，可删")
     elif b["merged"] and not b["current"]:
         n.append(("已合并，可删远端分支" if b["kind"] == "remote" else "已合并，可删") if b["behind"]
                  else f"与 {base} 相同")
@@ -236,8 +236,9 @@ def notes(b, base):
 
 
 def attention(b, base):
-    """--brief：只有这些情况才值得在收工时提一句。"""
-    return [x for x in notes(b, base) if x not in (f"与 {base} 相同", "尚无新提交")]
+    """--brief：只留需要动手的事；"和 main 相同"、"在别的 worktree" 这类只是信息，收工时不提。"""
+    return [x for x in notes(b, base)
+            if x not in (f"与 {base} 相同", "尚无新提交") and not x.startswith("在 worktree ")]
 
 
 def ago(ts):
