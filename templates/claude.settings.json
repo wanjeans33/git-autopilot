@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"__PYTHON__\" \"__HOOKS_DIR__/guard-branch.py\"",
+            "command": "\"__PYTHON__\" \"__HOOKS_DIR__/guard-branch.py\" --host claude",
             "timeout": 10,
             "statusMessage": "检查分支"
           }

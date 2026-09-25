@@ -8,6 +8,11 @@ guard-branch.py —— 不在保护分支（main/master）上干活；新分支�
           {"hookSpecificOutput": {"permissionDecision": "ask",  ...}}  → 弹确认框，人点了才放行
   exit 0 永远返回，让宿主按 JSON 判断；解析不了就放行，守卫绝不能把会话卡死。
 
+用法：guard-branch.py --host <claude|codex|pi>
+  `ask` 只有 Claude Code 认。Codex 官方文档写明 ask "parsed but not supported yet"：hook 记为失败、报错、
+  然后**照常执行工具**——也就是合并直接放行。所以只对声明为 claude 的宿主发 ask，其他宿主（含没传 --host 的）
+  一律 deny，让人自己在终端合。宁可拦错，不能放过。
+
 逃生门（二选一）：
   env ALLOW_MAIN=1
   touch <repo>/.git/ALLOW_MAIN          （不进版本库，按 clone 隔离）
@@ -43,6 +48,9 @@ SHELL_TOOLS = {"Bash", "bash", "shell", "local_shell", "run_command", "execute_c
 
 # 把 shell 命令按分隔符切开，逐段判断，避免 `cd x && git commit` 漏网
 SPLIT = re.compile(r"&&|\|\||;|\n|\|")
+
+# 哪些宿主真的会把 permissionDecision: ask 变成确认框。不在这里的一律用 deny 代替。
+ASK_HOSTS = {"claude"}
 
 # git 的全局选项里带参数的那几个，找子命令时要跳过
 GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
@@ -102,12 +110,23 @@ def new_branch_names(seg):
     return names
 
 
+def host_from_argv(argv):
+    """`--host codex` 或 `--host=codex`；没传就是 unknown，按不支持 ask 处理。"""
+    for i, a in enumerate(argv):
+        if a == "--host" and i + 1 < len(argv):
+            return argv[i + 1].strip().lower()
+        if a.startswith("--host="):
+            return a.split("=", 1)[1].strip().lower()
+    return "unknown"
+
+
 def main():
     try:
         ev = json.load(sys.stdin)
     except Exception:
         allow()
 
+    host = host_from_argv(sys.argv[1:])
     cwd = ev.get("cwd") or os.getcwd()
     if not enabled(cwd):
         allow()  # 这个仓库明确说不要
@@ -123,10 +142,17 @@ def main():
         if FORCE_PUSH.search(seg) and re.search(prot_re, seg):
             emit("deny", "拒绝强推保护分支。要覆盖远端请你本人确认后手动执行。")
         if GH_MERGE.search(seg):
+            if host in ASK_HOSTS:
+                emit(
+                    "ask",
+                    f"agent 要合并 PR：{seg.strip()}\n"
+                    f"合并后改动就进 {' / '.join(prot)} 了，不好撤。确认要合？",
+                )
             emit(
-                "ask",
-                f"agent 要合并 PR：{seg.strip()}\n"
-                f"合并后改动就进 {' / '.join(prot)} 了，不好撤。确认要合？",
+                "deny",
+                f"合并 PR 需要人本人确认，但当前宿主（{host}）不支持 hook 弹确认框，所以这里直接拦下。\n"
+                f"请把这条命令交给人在终端自己执行：{seg.strip()}\n"
+                f"合并后改动就进 {' / '.join(prot)} 了，不好撤。",
             )
 
     # ---- 规则 1：新建分支必须符合命名约定，任何分支都查 ----
