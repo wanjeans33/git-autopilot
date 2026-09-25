@@ -19,6 +19,10 @@
   再推到远端同名分支。电脑死机、会话崩了，改动都在，GitHub 上也有。**不碰 main**，merge / rebase 进行中也不碰，
   推送永远不带 force。
 - **收工提醒一句：** 这条分支已经攒了多少提交、多少文件，要不要先审一遍再合。
+  本地分支攒多了，还会顺带点名其他分支里该清理的：已合并可删、有 wip 没整理、远端已删、还没推。
+- **一条命令看清所有分支。** `python3 hooks/branch-status.py` 列一张表：每条本地 / 远端分支相对 main
+  领先落后多少、和远端同步没有、有没有 PR 及其评审 / CI 状态、能不能删、有没有 wip 提交、
+  是不是在别的 worktree 里。只读，不 fetch（`--fetch` 才联网），`gh` 没登录就只少 PR / CI 两列。
 - **该提 PR 了会提议，合并前一定弹框问你。** 阶段性完成由 agent 判断，判断到了就向你提议"建议提交 PR"，
   你点头它才 `gh pr create`。合并可以由 agent 执行，但 `gh pr merge` 一敲下去，宿主会弹一个确认框，
   你点"允许"才真的合，点"拒绝"就停。跟 Claude Code 平时问你"要不要允许这条命令"是同一个框。
@@ -129,7 +133,8 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 | 路径 | 说明 |
 |---|---|
 | `hooks/guard-branch.py` | 分支守卫 + 分支命名校验 + 合并确认，跑在 PreToolUse 阶段 |
-| `hooks/wrap-up.py` | 收工自动存档 + 推送 + 提示 + PR 提议，跑在 Stop 阶段 |
+| `hooks/wrap-up.py` | 收工自动存档 + 推送 + 提示 + PR 提议 + 分支总览，跑在 Stop 阶段 |
+| `hooks/branch-status.py` | 分支状态总览，人手动跑；`--brief` 给 wrap-up 用，`--json` 给机器用 |
 | `hooks/_common.py` | 两者共用：读 `git config autopilot.*` |
 | `hooks/py.sh` | 插件模式的启动器：依次找 `python3` / `python` / `py -3`，都没有就静默放行 |
 | `hooks/hooks.json` | 插件的 hook 声明，路径用 `${CLAUDE_PLUGIN_ROOT}` |
@@ -153,6 +158,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 | Stop 时工作分支领先远端 | `git push -u origin <分支>`，不带 force，推不上只提示 |
 | Stop 时分支领先基准分支 | 提示提交数、文件数，建议先审 |
 | Stop 时领先 ≥ N 个提交且没开 PR | 提示"若已到阶段性节点，建议向人提议提交 PR"（需装 `gh`） |
+| Stop 时本地工作分支 ≥ N 条 | 点名其他分支里已合并可删、有 wip、远端已删、未推送的 |
 
 ### 可调项
 
@@ -168,6 +174,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 | `autopilot.autocommit` | `true` | 收工是否自动存档 |
 | `autopilot.autopush` | `true` | 收工是否自动推送工作分支 |
 | `autopilot.pr-nudge-after` | `3` | 领先多少个提交后开始提 PR 建议 |
+| `autopilot.branch-overview-after` | `3` | 本地工作分支几条以上，收工时顺带列其他分支状态 |
 
 ### 严格程度
 

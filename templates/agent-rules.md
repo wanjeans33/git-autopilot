@@ -13,4 +13,5 @@
   执行时还会再弹一次确认框给人，人点了才真的合。别想办法绕开它。
 - **不强推 main / master。** 任何分支上都会被拦。要覆盖远端，让人自己来。
 - **确实必须在 main 上操作：** `touch .git/ALLOW_MAIN`，做完 `rm` 掉。
+- **想看各分支状态**（领先 / 落后、有没有 PR、能不能删、有没有 wip）：`python3 "__HOOKS_DIR__/branch-status.py"`，只读。
 <!-- git-autopilot:end -->

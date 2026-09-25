@@ -104,6 +104,7 @@ def install_hooks(path: Path, template: str, mode: str):
 
 def install_docs(path: Path, mode: str):
     snippet = (TOOLKIT / "templates" / "agent-rules.md").read_text(encoding="utf-8").strip()
+    snippet = snippet.replace("__HOOKS_DIR__", HOOKS_DIR.as_posix())
     existed = path.exists()
     text = path.read_text(encoding="utf-8") if existed else ""
     stripped = BLOCK.sub("", text)
@@ -166,7 +167,7 @@ def main(argv):
     print("逃生门   : ALLOW_MAIN=1  或  touch <仓库>/.git/ALLOW_MAIN")
     if mode == "install":
         print("某仓库关 : git config autopilot.enabled false")
-        print("可调项   : git config autopilot.{protected|base|branch-prefixes|branch-pattern|autocommit|autopush|pr-nudge-after}")
+        print("可调项   : git config autopilot.{protected|base|branch-prefixes|branch-pattern|autocommit|autopush|pr-nudge-after|branch-overview-after}")
         print("注意     : hook 配置在会话启动时快照，已开着的会话要重开才生效")
     return 0
 

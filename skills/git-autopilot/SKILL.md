@@ -19,6 +19,8 @@ description: 本机装了 git-autopilot 的 git 约定：不在 main/master 上�
   执行时还会再弹一次确认框给人，人点了才真的合。别想办法绕开它。
 - **不强推 main / master。** 任何分支上都会被拦。要覆盖远端，让人自己来。
 - **确实必须在 main 上操作：** `touch .git/ALLOW_MAIN`，做完 `rm` 掉。
+- **想看各分支状态**（领先 / 落后、有没有 PR、能不能删、有没有 wip）：
+  `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/branch-status.py"`，只读，`--fetch` 才联网。
 - **这个仓库不想要这套：** `git config autopilot.enabled false`。
 
 ## 被拦了怎么办
