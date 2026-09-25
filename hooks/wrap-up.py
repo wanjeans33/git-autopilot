@@ -57,6 +57,8 @@ elif dirty and in_progress:
 
 # ---- 2. 自动推送：工作分支推到远端同名分支，不带 force ----
 # 没远端就跳过；远端已是最新就跳过；推不上去（比如本地整理过历史）只提示，不强推。
+# refspec 必须把源和目标都写全：只写 `git push origin <branch>` 时，Git 会去 remote.<name>.push 里找
+# 匹配项并继承它的目标和 `+`（强制）语义，配了 `+refs/heads/feat/x:refs/heads/main` 的机器上就会改写远端 main。
 if cfg_bool(cwd, "autopush", True):
     remote = git(cwd, "config", f"branch.{branch}.remote") or "origin"
     if remote in git(cwd, "remote").split():
@@ -64,11 +66,16 @@ if cfg_bool(cwd, "autopush", True):
         ahead_of_remote = git(cwd, "rev-list", "--count", "@{u}..HEAD") if upstream else "1"
         if ahead_of_remote != "0":
             rc, _, err = git_rc(
-                cwd, "push", "-u", remote, branch, timeout=45,
+                cwd, "push", "-u", remote, f"refs/heads/{branch}:refs/heads/{branch}", timeout=45,
                 env={"GIT_TERMINAL_PROMPT": "0"},  # 没凭据就直接失败，别挂在密码提示上
             )
             if rc == 0:
-                msgs.append(f"已推到 {remote}/{branch}。")
+                # 成功提示看远端跟踪分支是否真的等于 HEAD，不假定 Git 推到了哪
+                landed = git(cwd, "rev-parse", "--verify", "-q", f"refs/remotes/{remote}/{branch}")
+                if landed and landed == git(cwd, "rev-parse", "HEAD"):
+                    msgs.append(f"已推到 {remote}/{branch}。")
+                else:
+                    msgs.append(f"push 返回成功，但 {remote}/{branch} 不是当前 HEAD，请检查远端。")
             else:
                 lines = err.splitlines() or ["未知错误"]
                 why = next((l for l in lines if "rejected" in l or l.startswith(("error:", "fatal:"))), lines[-1])
