@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" guard-branch.py",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/py.sh\" guard-branch.py --host claude",
             "timeout": 10,
             "statusMessage": "检查分支"
           }

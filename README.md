@@ -20,8 +20,12 @@
   推送永远不带 force。
 - **收工提醒一句：** 这条分支已经攒了多少提交、多少文件，要不要先审一遍再合。
 - **该提 PR 了会提议，合并前一定弹框问你。** 阶段性完成由 agent 判断，判断到了就向你提议"建议提交 PR"，
-  你点头它才 `gh pr create`。合并可以由 agent 执行，但 `gh pr merge` 一敲下去，宿主会弹一个确认框，
-  你点"允许"才真的合，点"拒绝"就停。跟 Claude Code 平时问你"要不要允许这条命令"是同一个框。
+  你点头它才 `gh pr create`。合并可以由 agent 执行，但 `gh pr merge` 一敲下去，Claude Code 会弹一个确认框，
+  你点"允许"才真的合，点"拒绝"就停。跟 Claude Code 平时问你"要不要允许这条命令"是同一个框，
+  但框里不只有命令：hook 先跑一次 `gh pr view` 把 PR 标题、链接、从哪合到哪、几个提交几个文件、
+  CI 和 review 状态、有没有冲突、合并方式、合完删不删分支都列出来，你不用离开框就能判断。
+  查不到（没登录、离线、超时）会明说"没查到 PR 信息"，不会假装没事。
+  Codex / Pi 的 hook 协议不支持弹框，那里 `gh pr merge` 会被直接拦下，由你自己在终端合，拦截信息里带同样的摘要。
 - **不让强推覆盖 main。** 这是少数几个能真把别人工作干掉的操作，任何分支上都拦。
 - **把约定讲在前面。** hook 是事后拦，约定是事前讲。两边说的是同一套规则，
   agent 一开始就按规矩走，而不是撞了墙才知道。
@@ -30,7 +34,8 @@
 
 说清楚比藏着好：
 
-- **不会不问就开 PR、不问就合并。** 开 PR 前 agent 会提议，合并时宿主会弹框，两道都过了才动。
+- **不会不问就开 PR、不问就合并。** 开 PR 前 agent 会提议，合并时 Claude Code 会弹框（Codex / Pi 直接拦），
+  两道都过了才动。
 - **自动存档不等于替你写提交历史。** `wip:` 提交只是防丢，合并前该 squash 就 squash，
   整理完用 `git push --force-with-lease` 推自己的分支。
 - **不是安全防护。** 它防的是顺手犯错，不防人故意绕过。真要挡住谁，
@@ -101,15 +106,21 @@ git config autopilot.autopush false
 | | 装法 | 约定写到 | 状态 |
 |---|---|---|---|
 | Claude Code | 插件，或 `install.py` | skill，或 `CLAUDE.md` | 官方文档，deny / ask / Stop 都实测过 |
-| Codex CLI | `install.py` | `AGENTS.md` | 官方文档，hook 可能需在 config.toml 打开开关，未实测 |
-| Pi | `install.py` | `AGENTS.md` | Claude 兼容层是第三方适配，全局路径按其文档推断，首次用前先手测（见下） |
+| Codex CLI | `install.py` | `AGENTS.md` | 官方文档明确 `ask` 不支持，合并 PR 改为 deny；非托管 hook 要先在 `/hooks` 里审阅并信任才会跑；未实测 |
+| Pi | `install.py` | `AGENTS.md` | Claude 兼容层是第三方适配，按不支持 `ask` 处理（合并 PR 用 deny），全局路径按其文档推断，首次用前先手测（见下） |
 
 三家能共用同一份脚本，是因为它们的 hook 协议**是同构的**——都是 stdin 收事件 JSON、
 stdout 回 `hookSpecificOutput.permissionDecision`。所以这里只有一份 `guard-branch.py`，
 不是三份。
 
-`permissionDecision` 有三档：`allow` 放行、`deny` 拦下、`ask` 弹确认框。合并 PR 用的是 `ask`。
-Claude Code 三档都实测过；Codex / Pi 的 `ask` 按文档同构，未实测，首次用前建议在一个不要紧的 PR 上试一次。
+`permissionDecision` 有三档：`allow` 放行、`deny` 拦下、`ask` 弹确认框。三档不是每家都认：
+Claude Code 三档都实测过；Codex 官方文档写明 `ask` "parsed but not supported yet"，遇到会把 hook 记为失败、
+报错、**然后照常执行工具**，等于放行。所以 `install.py` 给每家的 hook 命令都带 `--host <claude|codex|pi>`，
+守卫只对 `claude` 发 `ask`，其他宿主（含没传 `--host` 的旧安装）对 `gh pr merge` 一律 `deny`，让人自己在终端合。
+从旧版升级请重跑一次 `install.py`。
+
+Codex 还有一道自己的门：非托管 hook 首次运行前，要在 Codex 里执行 `/hooks` 审阅并信任这条 hook 定义，
+否则它根本不会跑。装完记得做这一步。
 
 首次手测（尤其 Pi）：
 
@@ -144,7 +155,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 | 规则 | 行为 |
 |---|---|
 | 强推 main/master | **任何分支都拦**（`--force-with-lease` 放行） |
-| `gh pr merge` | **任何分支都弹确认框**（`permissionDecision: ask`），人点允许才执行 |
+| `gh pr merge` | **任何分支都拦下问人**：Claude Code 弹确认框（`ask`），Codex / Pi 不支持 `ask`，直接 `deny`，由人在终端合。框里带 `gh pr view` 查来的 PR 摘要（标题、分支、提交数、CI、review、冲突、合并方式），查不到会明说；等 gh 的时长 `git config autopilot.gh-timeout`，默认 5 秒 |
 | `git switch -c` / `checkout -b` / `branch` 起的名字不合规 | **任何分支都拦**，回一句该怎么起 |
 | 保护分支上 `Edit` / `Write` / `apply_patch` | **拦** |
 | 保护分支上 `commit` `merge` `rebase` `push` `revert` `reset --hard` | **拦**（`cd x && git commit` 也拦得住，按 `&&` `;` `\|\|` 切段判断） |
