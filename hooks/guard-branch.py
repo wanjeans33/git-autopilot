@@ -200,10 +200,13 @@ def ci_status(rollup):
     return f"通过（{n}/{n}）"
 
 
-def pr_summary(cwd, seg, prot):
+def pr_summary(cwd, seg, prot, uncertain_context=False):
     """给确认框用的 PR 摘要。查得到就是一段能判断的信息，查不到就明说人在盲判。"""
     a = merge_args(seg)
-    info, err = pr_info(cwd, a["selector"], a["repo"])
+    if uncertain_context:
+        info, err = None, "复合命令的仓库上下文无法可靠确定；请在目标仓库单独执行合并命令"
+    else:
+        info, err = pr_info(cwd, a["selector"], a["repo"])
     method = a["method"] or "未指定（gh 会问，或按仓库只允许的那种）"
     if a["auto"]:
         method += "，--auto：CI 过了自动合"
@@ -271,7 +274,7 @@ def main():
         if FORCE_PUSH.search(seg) and re.search(prot_re, seg):
             emit("deny", "拒绝强推保护分支。要覆盖远端请你本人确认后手动执行。")
         if GH_MERGE.search(seg):
-            summary = pr_summary(cwd, seg, prot)
+            summary = pr_summary(cwd, seg, prot, uncertain_context=len(segments) > 1)
             if host in ASK_HOSTS:
                 emit(
                     "ask",

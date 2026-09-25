@@ -142,6 +142,14 @@ class MergeConfirmationCarriesPrInfo(unittest.TestCase):
         self.assertIn("CI：通过", reason)
         self.assertIn("交给人在终端自己执行", reason)
 
+    def test_compound_command_does_not_query_wrong_repository(self):
+        for host, expected in (("claude", "ask"), ("codex", "deny")):
+            decision, reason = self.guard("cd /another/repo && " + self.MERGE, host, "ok")
+            self.assertEqual(decision, expected)
+            self.assertIn("仓库上下文无法可靠确定", reason)
+            self.assertNotIn("CI：通过", reason)
+        self.assertEqual(self.gh_calls(), [])
+
     def test_not_found_says_so_instead_of_pretending(self):
         decision, reason = self.guard("gh pr merge 9999 -m", "claude", "fail")
         self.assertEqual(decision, "ask")
