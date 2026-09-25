@@ -152,7 +152,9 @@ def main():
                 "deny",
                 f"合并 PR 需要人本人确认，但当前宿主（{host}）不支持 hook 弹确认框，所以这里直接拦下。\n"
                 f"请把这条命令交给人在终端自己执行：{seg.strip()}\n"
-                f"合并后改动就进 {' / '.join(prot)} 了，不好撤。",
+                f"合并后改动就进 {' / '.join(prot)} 了，不好撤。"
+                + ("\n如果这其实是 Claude Code：hook 配置是旧版装的，没带 --host claude；"
+                   "重跑一次 install.py（或更新插件）就会改回弹确认框。" if host == "unknown" else ""),
             )
 
     # ---- 规则 1：新建分支必须符合命名约定，任何分支都查 ----

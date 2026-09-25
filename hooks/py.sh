@@ -6,7 +6,7 @@
 dir=${0%/*}                      # 不用 dirname：PATH 空着也得能跑
 [ "$dir" = "$0" ] && dir=.
 script="$dir/$1"
-shift                            # 剩下的参数原样交给脚本
+[ $# -gt 0 ] && shift             # 剩下的参数原样交给脚本；没参数时 dash 下 shift 会退出 2
 ok='import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'
 
 if command -v python3 >/dev/null 2>&1 && python3 -c "$ok" >/dev/null 2>&1; then

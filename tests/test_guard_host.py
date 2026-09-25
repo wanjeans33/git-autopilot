@@ -64,7 +64,7 @@ class MergeConfirmationPerHost(unittest.TestCase):
         self.assertEqual(guard(self.repo, "git status", "--host", "codex"), "allow")
         self.assertEqual(guard(self.repo, "git push --force origin main", "--host", "codex"), "deny")
 
-    @unittest.skipUnless(shutil.which("sh"), "插件启动器需要 sh")
+    @unittest.skipUnless(shutil.which("sh") and os.name != "nt", "插件启动器需要 POSIX sh；Windows 路径没有 / 分隔，py.sh 找不到脚本")
     def test_plugin_launcher_forwards_host(self):
         ev = {"cwd": str(self.repo), "tool_name": "Bash", "tool_input": {"command": self.MERGE}}
         r = subprocess.run(["sh", str(HOOKS / "py.sh"), "guard-branch.py", "--host", "claude"],
