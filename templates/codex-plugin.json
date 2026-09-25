@@ -1,0 +1,20 @@
+{
+  "name": "git-autopilot",
+  "version": "0.4.0",
+  "description": "Git workflow guardrails for Codex: branches, checkpoint commits, push and PR review reminders.",
+  "author": {
+    "name": "Wanjeans"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Git Autopilot",
+    "shortDescription": "Keep agent Git work on branches and checkpoint progress.",
+    "longDescription": "Protect main during agent work, checkpoint and push work branches at turn end, and require human PR merges. Hooks must be reviewed and trusted before use.",
+    "developerName": "Wanjeans",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Review my Git branch and suggest the next safe step."
+  },
+  "repository": "https://github.com/wanjeans33/git-autopilot",
+  "license": "MIT"
+}
