@@ -65,17 +65,16 @@ if cfg_bool(cwd, "autopush", True):
         upstream = git(cwd, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
         ahead_of_remote = git(cwd, "rev-list", "--count", "@{u}..HEAD") if upstream else "1"
         if ahead_of_remote != "0":
+            # 用 HEAD 的完整引用名，不用短名拼：有个同名 tag 时短名会变成 heads/feat/x，拼出来的 refspec 就错了
+            ref = git(cwd, "symbolic-ref", "--quiet", "HEAD") or f"refs/heads/{branch}"
             rc, _, err = git_rc(
-                cwd, "push", "-u", remote, f"refs/heads/{branch}:refs/heads/{branch}", timeout=45,
+                cwd, "push", "-u", remote, f"{ref}:{ref}", timeout=45,
                 env={"GIT_TERMINAL_PROMPT": "0"},  # 没凭据就直接失败，别挂在密码提示上
             )
             if rc == 0:
-                # 成功提示看远端跟踪分支是否真的等于 HEAD，不假定 Git 推到了哪
-                landed = git(cwd, "rev-parse", "--verify", "-q", f"refs/remotes/{remote}/{branch}")
-                if landed and landed == git(cwd, "rev-parse", "HEAD"):
-                    msgs.append(f"已推到 {remote}/{branch}。")
-                else:
-                    msgs.append(f"push 返回成功，但 {remote}/{branch} 不是当前 HEAD，请检查远端。")
+                # 源和目标都写死了，Git 返回 0 就是推到了这里；不查远端跟踪分支，
+                # single-branch clone 的 fetch refspec 不会更新它，查了反而误报
+                msgs.append(f"已推到 {remote}/{ref[len('refs/heads/'):] if ref.startswith('refs/heads/') else ref}。")
             else:
                 lines = err.splitlines() or ["未知错误"]
                 why = next((l for l in lines if "rejected" in l or l.startswith(("error:", "fatal:"))), lines[-1])

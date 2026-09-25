@@ -13,11 +13,19 @@ import tempfile
 import unittest
 
 HOOKS = pathlib.Path(__file__).resolve().parent.parent / "hooks"
-ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
-       "GIT_ALLOW_PROTOCOL": "file", "PYTHONDONTWRITEBYTECODE": "1"}
-for k in list(ENV):
-    if k == "ALLOW_MAIN":
-        del ENV[k]
+# 去掉宿主环境里的 GIT_DIR / GIT_WORK_TREE 之类（从 git hook 里跑测试时会带着），再隔离全局配置
+ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "ALLOW_MAIN"}
+ENV.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_ALLOW_PROTOCOL": "file", "PYTHONDONTWRITEBYTECODE": "1"})
+
+
+def git_version():
+    out = subprocess.run(["git", "--version"], text=True, capture_output=True).stdout
+    return tuple(int(x) for x in out.split()[2].split(".")[:2]) if out.startswith("git version") else (0, 0)
+
+
+# GIT_CONFIG_GLOBAL 是 2.32 才有的，更老的 git 会静默忽略，用户的全局配置就漏进来了
+REQUIRE_GIT = (2, 32)
 
 
 def git(cwd, *args, check=True):
@@ -33,6 +41,7 @@ def run_hook(name, cwd):
     return r.returncode, (json.loads(r.stdout).get("systemMessage", "") if r.stdout.strip() else ""), r.stderr
 
 
+@unittest.skipUnless(git_version() >= REQUIRE_GIT, f"需要 git >= {'.'.join(map(str, REQUIRE_GIT))}")
 class AutopushRefspec(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -88,6 +97,23 @@ class AutopushRefspec(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(git(self.bare, "rev-parse", "feat/x"), git(self.repo, "rev-parse", "HEAD"))
         self.assertIn("已推到 origin/feat/x", msg)
+
+    def test_tag_with_same_name_as_branch(self):
+        # 短名会变成 heads/feat/x，refspec 必须用完整引用名拼
+        git(self.repo, "tag", "feat/x", "main")
+        rc, msg, err = run_hook("wrap-up.py", self.repo)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(git(self.bare, "rev-parse", "refs/heads/feat/x"), git(self.repo, "rev-parse", "HEAD"))
+        self.assertIn("已推到 origin/feat/x", msg)
+
+    def test_single_branch_clone_reports_success(self):
+        # fetch refspec 只映射 main 时，push 不会更新 refs/remotes/origin/feat/x，成功提示不能依赖它
+        git(self.repo, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
+        rc, msg, err = run_hook("wrap-up.py", self.repo)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(git(self.bare, "rev-parse", "feat/x"), git(self.repo, "rev-parse", "HEAD"))
+        self.assertIn("已推到 origin/feat/x", msg)
+        self.assertNotIn("请检查远端", msg)
 
 
 if __name__ == "__main__":
