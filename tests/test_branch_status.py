@@ -198,7 +198,9 @@ class Collect(unittest.TestCase):
                            cwd=str(self.wt), env=ENV, text=True, capture_output=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("* feat/wt", r.stdout)
-        self.assertIn("在 worktree repo", r.stdout)   # 从 worktree 看，主目录里签出的 feat/ahead 是"别的 worktree"
+        self.assertIn("在 worktree repo", r.stdout)
+        # tempfile 在 macOS 上是 /var → /private/var 的符号链接：当前 worktree 自己不能被当成"别的 worktree"
+        self.assertNotIn("在 worktree wt", r.stdout)   # 从 worktree 看，主目录里签出的 feat/ahead 是"别的 worktree"
 
     def test_wrap_up_appends_overview(self):
         git(self.repo, "config", "autopilot.autocommit", "false")

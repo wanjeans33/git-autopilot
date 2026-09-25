@@ -124,7 +124,7 @@ if threshold.isdigit() and len(work_branches) >= int(threshold):
     except Exception:
         others = []
     if others:
-        msgs.append(f"其他分支：{'；'.join(others)}。完整总览：python3 {script}")
+        msgs.append(f"其他分支：{'；'.join(others)}。完整总览：python3 \"{script}\"")
 
 if msgs:
     json.dump({"systemMessage": " ".join(msgs)}, sys.stdout, ensure_ascii=False)

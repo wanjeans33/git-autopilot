@@ -78,11 +78,14 @@ def parse_ahead_behind(text):
 
 def parse_worktrees(text, here):
     """git worktree list --porcelain → {分支名: 路径}，只收不是当前目录的那些。"""
+    def same(a, b):   # macOS 的 /tmp 是 /private/tmp 的符号链接，worktree list 和 show-toplevel 可能一个走链接一个走实路径
+        return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
     out, path = {}, ""
     for line in text.splitlines():
         if line.startswith("worktree "):
             path = line[len("worktree "):]
-        elif line.startswith("branch refs/heads/") and path and os.path.normcase(path) != os.path.normcase(here):
+        elif line.startswith("branch refs/heads/") and path and not same(path, here):
             out[line[len("branch refs/heads/"):]] = path
     return out
 
