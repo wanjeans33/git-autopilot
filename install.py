@@ -5,6 +5,7 @@ git-autopilot 安装器。跨平台，只依赖 Python 3.8+，没有 bash。
   python3 install.py [仓库路径]              装到一个仓库（默认当前目录）
   python3 install.py --global                装到用户级，所有仓库生效
   python3 install.py --uninstall [仓库路径]   卸载；--uninstall --global 卸用户级
+  python3 install.py --uninstall --global --agent=codex  只卸 Codex 旧安装，迁移到插件
   python3 install.py --docs-only [仓库路径]   只写 CLAUDE.md / AGENTS.md 约定段，不碰 hook
 
 Windows 上用 py install.py 或 python install.py，效果一样。
@@ -128,6 +129,7 @@ def install_docs(path: Path, mode: str):
 
 def main(argv):
     mode, scope, docs_only = "install", "project", False
+    agent = None
     rest = []
     for a in argv:
         if a == "--uninstall":
@@ -136,6 +138,11 @@ def main(argv):
             scope = "global"
         elif a == "--docs-only":
             docs_only = True
+        elif a.startswith("--agent="):
+            agent = a.split("=", 1)[1]
+            if agent not in ("claude", "codex", "pi"):
+                print("--agent 必须是 claude、codex 或 pi", file=sys.stderr)
+                return 1
         elif a in ("-h", "--help"):
             print(__doc__); return 0
         else:
@@ -152,11 +159,15 @@ def main(argv):
         targets = PROJECT_TARGETS
         print(f"仓库 {root}：")
 
+    if agent:
+        targets = [t for t in targets if t[0].startswith("." + agent + "/")]
     seen_docs = set()
     for hook_rel, template, doc_rel in targets:
         if not docs_only:
             install_hooks(root / hook_rel, template, mode)
-        if doc_rel and doc_rel not in seen_docs:
+        # 仓库 AGENTS.md 由 Codex / Pi 共用，单宿主卸载时保留约定。
+        keep_shared = mode == "uninstall" and agent and scope == "project" and doc_rel == "AGENTS.md"
+        if doc_rel and doc_rel not in seen_docs and not keep_shared:
             seen_docs.add(doc_rel)
             install_docs(root / doc_rel, mode)
 

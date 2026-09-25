@@ -45,7 +45,7 @@
 
 ## 装
 
-三条路，选一条。都是装一次管所有仓库，不用每个项目单独弄。
+三种安装方式，选一种。都是装一次管所有仓库，不用每个项目单独弄。
 
 ### 1. Claude Code：装插件（推荐）
 
@@ -59,7 +59,37 @@
 不需要 bash，不改任何仓库，Windows 直接用。插件自带 hook 和一份 skill，skill 就是下面那段约定，
 agent 在 git 仓库里动手前会自己加载。
 
-### 2. Codex / Pi，或者不想用插件：`install.py`
+### 2. Codex：原生插件包
+
+在源码目录运行 `python3 build_codex_plugin.py`，生成 `dist/git-autopilot/`。
+也可以传入一个尚不存在、末级名为 `git-autopilot` 的输出目录。
+生成包包含 `.codex-plugin/plugin.json`、skill 和独立的 `hooks/hooks.json`，
+复用 Python 脚本，但明确传入 `--host codex`；不要把 Claude 插件的 hooks 配置直接用于 Codex。
+构建不会修改个人配置，也不会自动注册 marketplace。
+
+将生成包放入你的 Codex marketplace 后安装。本机个人 marketplace 注册名为 `personal` 时：
+
+```bash
+codex plugin add git-autopilot@personal
+```
+
+安装后开启新会话，在 Codex CLI 的 `/hooks` 中审阅并信任插件 hooks。
+安装成功不等于 hooks 已启用；信任前 Codex 会跳过它们。
+macOS / Linux 需要 `sh` 和 Python 3.8+；Windows 的命令覆盖使用 PATH 上的 `python`，尚未实机验证。
+
+旧 `install.py` 用户：先安装插件并确认可加载，再只移除 Codex 的旧配置，避免 Stop 重复提交和推送：
+
+```bash
+python3 install.py --uninstall --global --agent=codex
+python3 install.py --uninstall --agent=codex /path/to/repo
+```
+
+按此前实际安装范围执行。其他宿主配置会保留；仓库内 Codex / Pi 共用的 AGENTS.md 也保留。
+插件卸载使用 `codex plugin remove git-autopilot@personal`；不会撤销已经产生的 Git 提交或推送。
+
+参考：[插件打包](https://developers.openai.com/plugins/build/plugins)、[Codex hooks 与信任](https://learn.chatgpt.com/docs/hooks)。
+
+### 3. Pi，或者不想用插件：`install.py`
 
 只依赖 Python 3.8+，三个系统一样：
 
@@ -75,7 +105,7 @@ Windows 上用 `py install.py` 或 `python install.py`。老习惯 `./install.sh
 约定段落写进 `~/.claude/CLAUDE.md` 和 `~/.codex/AGENTS.md`。按仓库装则写进仓库里的同名文件。
 重复装不会装重，**不会动你已有的其他配置和文档内容**，装之前自动备份成 `.bak`。
 
-### 3. 某个仓库不想要
+### 4. 某个仓库不想要
 
 ```bash
 git config autopilot.enabled false
@@ -106,7 +136,7 @@ git config autopilot.autopush false
 | | 装法 | 约定写到 | 状态 |
 |---|---|---|---|
 | Claude Code | 插件，或 `install.py` | skill，或 `CLAUDE.md` | 官方文档，deny / ask / Stop 都实测过 |
-| Codex CLI | `install.py` | `AGENTS.md` | 官方文档明确 `ask` 不支持，合并 PR 改为 deny；非托管 hook 要先在 `/hooks` 里审阅并信任才会跑；未实测 |
+| Codex CLI | 原生插件包，或 `install.py` | skill，或 `AGENTS.md` | 合并 PR 用 deny；插件打包及 hooks 子进程集成测试通过；需在 `/hooks` 信任后再验证完整会话 |
 | Pi | `install.py` | `AGENTS.md` | Claude 兼容层是第三方适配，按不支持 `ask` 处理（合并 PR 用 deny），全局路径按其文档推断，首次用前先手测（见下） |
 
 三家能共用同一份脚本，是因为它们的 hook 协议**是同构的**——都是 stdin 收事件 JSON、
@@ -149,6 +179,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 | `templates/*.json` | `install.py` 用的三家 hook 配置模板，`__PYTHON__` / `__HOOKS_DIR__` 装载时替换 |
 | `templates/agent-rules.md` | `install.py` 写进 CLAUDE.md / AGENTS.md 的那段约定 |
 | `install.py` | 装载 / 卸载，幂等，跨平台。`install.sh` 只是转调它 |
+| `build_codex_plugin.py` | 生成独立 Codex 插件包，避免加载 Claude 专用 hook 声明 |
 
 ### 规则
 
@@ -194,6 +225,7 @@ echo '{"cwd":"'$PWD'","tool_name":"Edit","tool_input":{}}' | python3 hooks/guard
 
 - 判断分支用的是**会话所在仓库**，不跟着命令里的 `cd` 走。在 main 上编辑仓库外的文件也会被拦，
   开条分支就好。
+- 复合命令里的 PR 合并不查询摘要，因为无法可靠确定执行时的仓库；提示在目标仓库单独执行。
 - 命令按字符串匹配。`git log --grep commit`、`echo git commit` 这类会误拦，重新措辞即可。
 - 自动存档用 `git add -A`，没进 `.gitignore` 的临时产物会被一起存进去。
 - 自动推送需要本机已有推送凭据（ssh key 或 credential helper），没有就直接失败并提示，不会挂在密码提示上。
